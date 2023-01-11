@@ -11,27 +11,37 @@ pub struct Entity {
 }
 
 fn main() {
-    
     let mut model = vec![
-        Entity{x: 0, y: 0, width: 2, height: 2, collision: false},
-        Entity{x: 1, y: 1, width: 2, height: 2, collision: false},
+        Entity {
+            x: 0,
+            y: 0,
+            width: 2,
+            height: 2,
+            collision: false,
+        },
+        Entity {
+            x: 1,
+            y: 1,
+            width: 2,
+            height: 2,
+            collision: false,
+        },
     ];
 
-    let mut tree = QuadTree::new(0,0,128,128); //128x128 world, 8x8 grid, so every leaf is 16x16
+    let mut tree = QuadTree::new(0, 0, 128, 128); //128x128 world, 8x8 grid, so every leaf is 16x16
 
     loop {
-
         //rebuild the tree (this does not effect underlying vec capacities)
         tree.clear();
         for entity in model.iter() {
             //insert a reference to the entity into the tree
-            tree.insert(entity.x, entity.y, entity);
+            tree.insert(entity.x, entity.y, entity.clone());
         }
 
         //calculate colisions
         for entity in model.iter_mut() {
             let leaf = tree.get_leaf_around(entity.x, entity.y).unwrap();
-            for (_,_,other_entity) in leaf.vec.iter() {
+            for (_, _, other_entity) in leaf.vec.iter() {
                 if is_coliding(entity, other_entity) {
                     entity.collision = true;
                 }
@@ -41,9 +51,8 @@ fn main() {
 }
 
 fn is_coliding(entity: &Entity, other_entity: &Entity) -> bool {
-    entity.x < other_entity.x + other_entity.width &&
-    entity.x + entity.width > other_entity.x &&
-    entity.y < other_entity.y + other_entity.height &&
-    entity.y + entity.height > other_entity.y
+    entity.x < other_entity.x + other_entity.width
+        && entity.x + entity.width > other_entity.x
+        && entity.y < other_entity.y + other_entity.height
+        && entity.y + entity.height > other_entity.y
 }
-
