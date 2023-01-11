@@ -16,7 +16,7 @@ pub type QuadTree<DataT> = [[[QuadTreeLeaf<DataT>; 4]; 4]; 4];
 //pub type DeepQuadTree<'a> = [[[[QuadTreeLeaf<'a>; 4]; 4]; 4]; 4];
 
 /// Leaf of the QuadTree
-pub struct QuadTreeLeaf<DataT: Clone> {
+pub struct QuadTreeLeaf<DataT> {
     pub vec: Vec<(u16, u16, DataT)>,
     rect_x: u16,
     rect_y: u16,
@@ -26,15 +26,16 @@ pub struct QuadTreeLeaf<DataT: Clone> {
 
 /// Trait for an array of 4 QuadTreeLeaves or 4 other Quadrants
 pub trait Quadrants {
-    type DataT: Clone;
+    type DataT;
     ///Construct 4 empty quadrants, each containing other quadrants, or a leaf
     fn new(rect_x: u16, rect_y: u16, rect_w: u16, rect_h: u16) -> Self;
     ///Remove all points from all leaves
     fn clear(&mut self);
     /// Insert a point into the correct leaf, or return false if it doesn't fit
-    fn insert(&mut self, x: u16, y: u16, data: Self::DataT) -> bool;
+    fn insert(&mut self, x: u16, y: u16, data: Self::DataT);
     /// Return a reference to the leaf that contains the point
     fn get_leaf_around(&self, x: u16, y: u16) -> Option<&QuadTreeLeaf<Self::DataT>>;
+    fn get_leaf_around_mut(&mut self, x: u16, y: u16) -> Option<&mut QuadTreeLeaf<Self::DataT>>;
     ///Get all data in all leaves
     fn all(&self) -> Vec<&Self::DataT>;
     //used for debugging
@@ -62,15 +63,11 @@ where
             quadrant_or_leaf.clear();
         }
     }
-    fn insert(&mut self, x: u16, y: u16, data: Self::DataT) -> bool {
-        for quadrant_or_leaf in self.iter_mut() {
-            //this will recurse down the tree until it finds a leaf
-            //short circuit if we find a leaf that accepts the point
-            if quadrant_or_leaf.insert(x, y, data.clone()) {
-                return true;
-            }
-        }
-        false
+    fn insert(&mut self, x: u16, y: u16, data: Self::DataT) {
+        let leaf = self.get_leaf_around_mut(x, y).unwrap();
+        //this will recurse down the tree until it finds a leaf
+        //short circuit if we find a leaf that accepts the point
+        leaf.insert(x, y, data);
     }
     /// Return a reference to the vector of points in the leaf that contains the point
     fn get_leaf_around(&self, x: u16, y: u16) -> Option<&QuadTreeLeaf<Self::DataT>> {
@@ -83,6 +80,18 @@ where
         }
         None
     }
+
+    fn get_leaf_around_mut(&mut self, x: u16, y: u16) -> Option<&mut QuadTreeLeaf<Self::DataT>> {
+        for quadrant_or_leaf in self.iter_mut() {
+            //this will recurse down the tree until it finds a leaf
+            //short circuit if we find a leaf that could contain the point
+            if let Some(vec) = quadrant_or_leaf.get_leaf_around_mut(x, y) {
+                return Some(vec);
+            }
+        }
+        None
+    }
+
     ///Get all data in all leaves
     fn all(&self) -> Vec<&Self::DataT> {
         let mut vec = Vec::new();
@@ -98,7 +107,7 @@ where
 // impl<DataT> !Quadrants<DataT> for QuadTreeLeaf<DataT> {}
 
 /// An array of 4 QuadTreeLeafs implements Quadrants
-impl<DataT: Clone> Quadrants for [QuadTreeLeaf<DataT>; 4] {
+impl<DataT> Quadrants for [QuadTreeLeaf<DataT>; 4] {
     type DataT = DataT;
     ///Construct 4 empty leaves
     fn new(rect_x: u16, rect_y: u16, rect_w: u16, rect_h: u16) -> Self {
@@ -115,18 +124,16 @@ impl<DataT: Clone> Quadrants for [QuadTreeLeaf<DataT>; 4] {
             leaf.clear();
         }
     }
-    fn insert(&mut self, x: u16, y: u16, data: DataT) -> bool {
-        for leaf in self.iter_mut() {
-            //short circuit if we find a leaf that accepts the point
-            if leaf.insert(x, y, data.clone()) {
-                return true;
-            }
-        }
-        false
+    fn insert(&mut self, x: u16, y: u16, data: DataT) {
+        let leaf = self.get_leaf_around_mut(x, y).unwrap();
+        leaf.insert(x, y, data);
     }
     /// Return a reference to the vector of points in the leaf that contains the point
     fn get_leaf_around(&self, x: u16, y: u16) -> Option<&QuadTreeLeaf<DataT>> {
         self.iter().find(|&leaf| leaf.valid_point(x, y))
+    }
+    fn get_leaf_around_mut(&mut self, x: u16, y: u16) -> Option<&mut QuadTreeLeaf<DataT>> {
+        self.iter_mut().find(|leaf| leaf.valid_point(x, y))
     }
     ///Get all data in all leaves
     fn all(&self) -> Vec<&Self::DataT> {
@@ -140,7 +147,7 @@ impl<DataT: Clone> Quadrants for [QuadTreeLeaf<DataT>; 4] {
 }
 
 /// A QuadTree leaf with a constructor and a method to insert a point
-impl<DataT: Clone> QuadTreeLeaf<DataT> {
+impl<DataT> QuadTreeLeaf<DataT> {
     fn new(rect_x: u16, rect_y: u16, rect_w: u16, rect_h: u16) -> Self {
         QuadTreeLeaf {
             vec: Vec::new(),
@@ -153,13 +160,9 @@ impl<DataT: Clone> QuadTreeLeaf<DataT> {
     fn clear(&mut self) {
         self.vec.clear();
     }
-    fn insert(&mut self, x: u16, y: u16, data: DataT) -> bool {
-        if self.valid_point(x, y) {
-            self.vec.push((x, y, data));
-            true
-        } else {
-            false
-        }
+    fn insert(&mut self, x: u16, y: u16, data: DataT) {
+        assert!(self.valid_point(x, y));
+        self.vec.push((x, y, data));
     }
     fn valid_point(&self, px: u16, py: u16) -> bool {
         px >= self.rect_x
